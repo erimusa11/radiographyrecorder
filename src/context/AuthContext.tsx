@@ -31,6 +31,11 @@ interface AuthContextValue {
   loading: boolean;
   /** False when the Firebase settings are missing from .env. */
   configured: boolean;
+  /**
+   * True when the person typed their password in this run (as opposed to a saved session coming back on its own). The
+   * lock screen only asks for the phone's fingerprint / PIN in the second case.
+   */
+  freshSignIn: boolean;
   /** `remember` keeps the person signed in on this device (the default); without it the session ends when the app or tab closes. */
   signIn: (email: string, password: string, remember?: boolean) => Promise<void>;
   /** Sends a password-reset email. Succeeds silently for unknown emails so accounts cannot be probed. */
@@ -43,6 +48,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(null);
   const [demoUser, setDemoUser] = useState<AppUser | null>(null);
+  const [freshSignIn, setFreshSignIn] = useState(false);
   const [firebaseLoading, setLoading] = useState(isFirebaseConfigured);
   // Release builds have no demo account, so there is nothing to wait for there.
   const [demoChecked, setDemoChecked] = useState(!__DEV__);
@@ -84,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await new Promise((resolve) => setTimeout(resolve, DEMO_SIGN_IN_MS));
       if (remember) await saveDemoSession(demo);
       else await clearDemoSession();
+      setFreshSignIn(true);
       setDemoUser(demo);
       return;
     }
@@ -94,10 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Storage is unavailable here (e.g. a private window). Sign in anyway; the session just will not outlive this run.
     }
-    // No app-level timeout on purpose. The request cannot be cancelled, so giving up early would let a late success sign
-    // the person in after the screen had already reported a failure (or replace a newer attempt). Firebase bounds the
-    // request itself and reports auth/network-request-failed; the login form stays locked until then.
-    await signInWithEmailAndPassword(auth, email.trim(), password);
+    // Set BEFORE the request: Firebase announces the new user a moment before this call returns, and the lock screen
+    // must already know that this person just typed their password, or it would ask for their fingerprint right away.
+    setFreshSignIn(true);
+    try {
+      // No app-level timeout on purpose. The request cannot be cancelled, so giving up early would let a late success
+      // sign the person in after the screen had already reported a failure (or replace a newer attempt). Firebase bounds
+      // the request itself and reports auth/network-request-failed; the login form stays locked until then.
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      setFreshSignIn(false);
+      throw error;
+    }
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
@@ -111,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    setFreshSignIn(false);
     setDemoUser(null);
     await clearDemoSession();
     if (auth) await firebaseSignOut(auth);
@@ -121,8 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = !demoChecked || (firebaseLoading && !demoUser);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, configured: isFirebaseConfigured, signIn, resetPassword, signOut }),
-    [user, loading, signIn, resetPassword, signOut],
+    () => ({ user, loading, configured: isFirebaseConfigured, freshSignIn, signIn, resetPassword, signOut }),
+    [user, loading, freshSignIn, signIn, resetPassword, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

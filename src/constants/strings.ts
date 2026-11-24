@@ -13,6 +13,19 @@ export const strings = {
     access: 'Qasje e sigurt',
     staffOnly: 'Vetëm personel i autorizuar',
   },
+  /** The screen that covers the app until the phone's fingerprint, face or PIN is checked. */
+  lock: {
+    title: 'Aplikacioni është i kyçur',
+    subtitle: 'Zhblloko me gjurmën e gishtit, me fytyrën ose me kyçin e telefonit.',
+    unlock: 'Zhblloko',
+    unlocking: 'Duke verifikuar…',
+    signOut: 'Dil nga llogaria',
+    /** The title of the phone's own prompt. */
+    prompt: 'Zhblloko Radiography Recorder',
+    cancel: 'Anulo',
+    failed: 'Nuk u verifikua. Provo përsëri.',
+    lockedOut: 'Shumë përpjekje të gabuara. Prit pak dhe provo përsëri.',
+  },
   login: {
     title: 'Mirë se u ktheve',
     subtitle: 'Hyr për të regjistruar dhe shqyrtuar radiografitë.',

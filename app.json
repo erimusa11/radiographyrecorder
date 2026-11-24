@@ -10,11 +10,19 @@
     "backgroundColor": "#191919",
     "ios": {
       "bundleIdentifier": "com.eri.radiographyrecorder",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.eri.radiographyrecorder",
       "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#191919",
@@ -36,6 +44,13 @@
           "backgroundColor": "#191919",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 300
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Lejo $(PRODUCT_NAME) të përdorë Face ID për ta zhbllokuar aplikacionin."
         }
       ]
     ],

@@ -1,18 +1,33 @@
 rules_version = '2';
 
 // Paste this into Firebase console > Firestore Database > Rules, then press Publish.
-// Everything is closed except the places the app uses (records, stock, shopping list, saved lists), and only for signed-in users.
-// IMPORTANT: also turn off "Enable create (sign-up)" under Authentication > Settings > User actions,
-// otherwise anyone could create an account and pass "signed in".
+//
+// Everything is closed except the places the app uses (records, stock, shopping list, saved lists), and only for STAFF:
+// a person who is signed in AND has a document in the `staff` collection whose ID is their user ID (UID).
+// Being signed in is not enough on its own, so a stranger who somehow gets an account still sees nothing.
+//
+// To let a new person in: Authentication > Users > copy their "User UID", then Firestore Database > Data >
+// collection `staff` > Add document > Document ID = that UID, with one field `active` (boolean) = true.
+// To remove a person: delete their `staff` document (and their user in Authentication).
+//
+// Also turn off "Enable create (sign-up)" under Authentication > Settings > User actions.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
+    // True only for signed-in people on the staff list. The `staff` documents can be read here even though
+    // the app itself is not allowed to read or write them (see the last rule).
+    function isStaff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid));
     }
 
     function text(value, maxLength) {
       return value is string && value.size() <= maxLength;
+    }
+
+    // Ids are made by the app (letters and digits). Refuse anything else, so nobody can store junk under odd names.
+    function validId(id) {
+      return id.size() >= 1 && id.size() <= 64 && id.matches('^[A-Za-z0-9_-]+$');
     }
 
     // One patient record: only these fields, with sensible types and sizes.
@@ -35,19 +50,20 @@ service cloud.firestore {
 
     // Patient records.
     match /radiographs/{recordId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && validId(recordId)
         && validRecord(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.updatedBy == request.auth.uid;
       // The exam date and time, the creation time and the creator never change.
-      allow update: if signedIn()
+      allow update: if isStaff()
         && validRecord(request.resource.data)
         && request.resource.data.examAt == resource.data.examAt
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.updatedBy == request.auth.uid;
-      allow delete: if signedIn();
+      allow delete: if isStaff();
     }
 
     // One product in the store room (the Stoku tab).
@@ -77,43 +93,56 @@ service cloud.firestore {
 
     // The products in stock.
     match /stock/{itemId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && validId(itemId)
         && validStockItem(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.updatedBy == request.auth.uid;
       // The creation time and the creator never change.
-      allow update: if signedIn()
+      allow update: if isStaff()
         && validStockItem(request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.updatedBy == request.auth.uid;
-      allow delete: if signedIn();
+      allow delete: if isStaff();
     }
 
     // The list of things to buy.
     match /shopping/{itemId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && validId(itemId)
         && validBuyItem(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.updatedBy == request.auth.uid;
-      allow update: if signedIn()
+      allow update: if isStaff()
         && validBuyItem(request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.updatedBy == request.auth.uid;
-      allow delete: if signedIn();
+      allow delete: if isStaff();
     }
 
     // The saved values behind the "type or choose" fields (exam types, film types and referring doctors).
     match /settings/options {
-      allow read: if signedIn();
-      allow write: if signedIn()
+      allow read: if isStaff();
+      allow write: if isStaff()
         && request.resource.data.keys().hasOnly(['examTypes', 'filmTypes', 'doctors'])
         && request.resource.data.examTypes is list && request.resource.data.examTypes.size() <= 200
         && request.resource.data.filmTypes is list && request.resource.data.filmTypes.size() <= 200
         && request.resource.data.doctors is list && request.resource.data.doctors.size() <= 500;
+    }
+
+    // The staff list. It is managed only by hand in the Firebase console: the app can neither read nor change it,
+    // so nobody can add themselves to it.
+    match /staff/{uid} {
+      allow read, write: if false;
+    }
+
+    // Everything else stays closed (this is also the default, written out so it is obvious).
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

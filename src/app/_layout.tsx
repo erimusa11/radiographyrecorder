@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { LockGate } from '@/components/lock/LockGate';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RecordsProvider } from '@/context/RecordsContext';
 import { StockProvider } from '@/context/StockContext';
@@ -62,7 +63,9 @@ export default function RootLayout() {
         <RecordsProvider>
           <StockProvider>
             <StatusBar style="light" />
-            <RootNavigator />
+            <LockGate>
+              <RootNavigator />
+            </LockGate>
           </StockProvider>
         </RecordsProvider>
       </AuthProvider>
