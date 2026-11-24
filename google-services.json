@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "475181630081",
+    "project_id": "radiographyrecorder",
+    "storage_bucket": "radiographyrecorder.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:475181630081:android:82d0e6ebdad84d69408380",
+        "android_client_info": {
+          "package_name": "com.eri.radiographyrecorder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApYuzt7ryDJE2-oO8w_2reT_nkqZe9_bA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

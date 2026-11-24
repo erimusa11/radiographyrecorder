@@ -1,0 +1,119 @@
+rules_version = '2';
+
+// Paste this into Firebase console > Firestore Database > Rules, then press Publish.
+// Everything is closed except the places the app uses (records, stock, shopping list, saved lists), and only for signed-in users.
+// IMPORTANT: also turn off "Enable create (sign-up)" under Authentication > Settings > User actions,
+// otherwise anyone could create an account and pass "signed in".
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function text(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    // One patient record: only these fields, with sensible types and sizes.
+    function validRecord(data) {
+      return data.keys().hasOnly(['fullName', 'idNumber', 'residence', 'age', 'referringDoctor', 'examType', 'filmType',
+                                  'examAt', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && data.keys().hasAll(['fullName', 'idNumber', 'residence', 'age', 'referringDoctor', 'examType', 'filmType',
+                               'examAt', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && text(data.fullName, 120) && data.fullName.size() >= 3
+        && text(data.idNumber, 40)
+        && text(data.residence, 160)
+        && text(data.referringDoctor, 120)
+        && text(data.examType, 80) && data.examType.size() > 0
+        && text(data.filmType, 80) && data.filmType.size() > 0
+        && data.age is int && data.age >= 0 && data.age <= 120
+        && data.examAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Patient records.
+    match /radiographs/{recordId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && validRecord(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+      // The exam date and time, the creation time and the creator never change.
+      allow update: if signedIn()
+        && validRecord(request.resource.data)
+        && request.resource.data.examAt == resource.data.examAt
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if signedIn();
+    }
+
+    // One product in the store room (the Stoku tab).
+    function validStockItem(data) {
+      return data.keys().hasOnly(['name', 'quantity', 'unit', 'minQuantity', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && data.keys().hasAll(['name', 'quantity', 'unit', 'minQuantity', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && text(data.name, 80) && data.name.size() > 0
+        && text(data.unit, 20)
+        && data.quantity is int && data.quantity >= 0 && data.quantity <= 100000
+        && data.minQuantity is int && data.minQuantity >= 0 && data.minQuantity <= 100000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // One line of the "Lista për t'u blerë". The amount ("quantity" and "unit") is optional so that lines saved before
+    // it existed can still be ticked and cleared.
+    function validBuyItem(data) {
+      return data.keys().hasOnly(['name', 'quantity', 'unit', 'done', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && data.keys().hasAll(['name', 'done', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+        && text(data.name, 120) && data.name.size() > 0
+        && (!('quantity' in data) || (data.quantity is int && data.quantity >= 1 && data.quantity <= 100000))
+        && (!('unit' in data) || text(data.unit, 20))
+        && data.done is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // The products in stock.
+    match /stock/{itemId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && validStockItem(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+      // The creation time and the creator never change.
+      allow update: if signedIn()
+        && validStockItem(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if signedIn();
+    }
+
+    // The list of things to buy.
+    match /shopping/{itemId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && validBuyItem(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow update: if signedIn()
+        && validBuyItem(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if signedIn();
+    }
+
+    // The saved values behind the "type or choose" fields (exam types, film types and referring doctors).
+    match /settings/options {
+      allow read: if signedIn();
+      allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['examTypes', 'filmTypes', 'doctors'])
+        && request.resource.data.examTypes is list && request.resource.data.examTypes.size() <= 200
+        && request.resource.data.filmTypes is list && request.resource.data.filmTypes.size() <= 200
+        && request.resource.data.doctors is list && request.resource.data.doctors.size() <= 500;
+    }
+  }
+}
